@@ -4,7 +4,7 @@ Parts of the code are a little ugly, and it doesn't have many features, but it i
 
 Here is a sample usage from the REPL:
 
-``` common-lisp "Sample Usage"
+```commonlisp
 * (ql:quickload 'gpxtools)
 To load "gpxtools":
   Load 1 ASDF system:
