@@ -8,7 +8,9 @@
   :license "ISC"
   :depends-on (#:cxml
                #:xpath
-			   #:utm)
+               #:utm
+               #:adw-charting
+               #:adw-charting-vecto)
   :components ((:static-file "LICENSE")
                (:file "package")
                (:file "gpxtools")))

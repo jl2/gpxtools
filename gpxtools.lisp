@@ -148,6 +148,25 @@
   (loop for track in (gpx-file-tracks file)
 		summing (traverse2 track func)))
 
+(defgeneric collect-points (el)
+  (:documentation "Traverse the GPX element and sum the results of (func point[i] point[i+1])"))
+
+(defmethod collect-points ((seg gpx-segment))
+
+  (format t "collect-points returning ~a points~%" (length (gpx-segment-points seg)))
+  (gpx-segment-points seg))
+  
+(defmethod collect-points ((track gpx-track))
+  (let ((rval ()))
+    (loop for seg in (gpx-track-segments track)
+          appending (collect-points seg) into rval
+          finally (return rval))))
+
+(defmethod collect-points ((file gpx-file))
+  (let ((rval ()))
+    (loop for track in (gpx-file-tracks file)
+          appending (collect-points track) into rval
+          finally (return rval))))
 
 (defun elevation-gain (el)
   (traverse2 el #'ele-gain))
@@ -168,7 +187,18 @@
   (format t "Total elevation loss: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet el) el) shortunit)
   (format t "Total elevation loss: ~a ~a~%" (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)))
 
-;; (defun find-loop (gpx)
-  
-(defun find-loop (gpx)
-  
+(defun elevation-plot (gpx &key (file-name))
+  (let ((all-pts (collect-points gpx))
+        (total-distance 0.0)
+        (new-points ()))
+    (loop for i in all-pts
+          for j in (cdr all-pts)
+          do
+          (incf total-distance (distance-between i j))
+          (push (list (meters-to-miles total-distance) (meters-to-feet (gpx-pt-ele i))) new-points))
+    (format t "Plotting ~a points.~%" (length new-points))
+    (adw-charting:with-chart (:line 1600 1200)
+                             (adw-charting:add-series "Elevation" new-points)
+                             (adw-charting:set-axis :y "Elevation (feet)")
+                             (adw-charting:set-axis :x "Distance (miles)")
+                             (adw-charting:save-file file-name))))
