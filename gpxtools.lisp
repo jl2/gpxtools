@@ -97,23 +97,23 @@
 		 (eldiff2 (* eldiff eldiff)))
 	(sqrt (+ ndiff2 ediff2 eldiff2))))
 
-(defgeneric distance (el)
-  (:documentation "Compute the distance of the element."))
+;; (defgeneric distance (el)
+;;   (:documentation "Compute the distance of the element."))
 
-(defmethod distance ((seg gpx-segment))
-  (loop for i in (gpx-segment-points seg)
-		for j in (cdr (gpx-segment-points seg))
-		summing (distance-between i j) into total
-		finally (return total)))
+;; (defmethod distance ((seg gpx-segment))
+;;   (loop for i in (gpx-segment-points seg)
+;; 		for j in (cdr (gpx-segment-points seg))
+;; 		summing (distance-between i j) into total
+;; 		finally (return total)))
 
-(defmethod distance ((track gpx-track))
-  (loop for seg in (gpx-track-segments track)
-		summing (distance seg) into total
-		finally (return total)))
+;; (defmethod distance ((track gpx-track))
+;;   (loop for seg in (gpx-track-segments track)
+;; 		summing (distance seg) into total
+;; 		finally (return total)))
 
-(defmethod distance ((file gpx-file))
-  (loop for track in (gpx-file-tracks file)
-		summing (distance track)))
+;; (defmethod distance ((file gpx-file))
+;;   (loop for track in (gpx-file-tracks file)
+;; 		summing (distance track)))
 
 (defun elevation-diff (p1 p2)
   (- (gpx-pt-ele p1) (gpx-pt-ele p2)))
@@ -130,41 +130,33 @@
 		diff
 	  0.0)))
 
-(defgeneric elevation-gain (el)
-  (:documentation "Compute the elevation gain of the element."))
+(defgeneric traverse2 (el func)
+  (:documentation "Traverse the GPX element and sum the results of (func point[i] point[i+1])"))
 
-(defmethod elevation-gain ((seg gpx-segment))
+(defmethod traverse2 ((seg gpx-segment) func)
   (loop for i in (gpx-segment-points seg)
-		for j in (cdr (gpx-segment-points seg))
-		summing (ele-gain i j) into total
-		finally (return total)))
-
-(defmethod elevation-gain ((track gpx-track))
+        for j in (cdr (gpx-segment-points seg))
+        summing (apply func (list i j)) into total
+        finally (return total)))
+  
+(defmethod traverse2 ((track gpx-track) func)
   (loop for seg in (gpx-track-segments track)
-		summing (elevation-gain seg) into total
+		summing (traverse2 seg func) into total
 		finally (return total)))
 
-(defmethod elevation-gain ((file gpx-file))
+(defmethod traverse2 ((file gpx-file) func)
   (loop for track in (gpx-file-tracks file)
-		summing (elevation-gain track)))
+		summing (traverse2 track func)))
 
-(defgeneric elevation-loss (el)
-  (:documentation "Compute the elevation loss of the element."))
 
-(defmethod elevation-loss ((seg gpx-segment))
-  (loop for i in (gpx-segment-points seg)
-		for j in (cdr (gpx-segment-points seg))
-		summing (ele-loss i j) into total
-		finally (return total)))
+(defun elevation-gain (el)
+  (traverse2 el #'ele-gain))
 
-(defmethod elevation-loss ((track gpx-track))
-  (loop for seg in (gpx-track-segments track)
-		summing (elevation-loss seg) into total
-		finally (return total)))
+(defun elevation-loss (el)
+  (traverse2 el #'ele-loss))
 
-(defmethod elevation-loss ((file gpx-file))
-  (loop for track in (gpx-file-tracks file)
-		summing (elevation-loss track)))
+(defun distance (el)
+  (traverse2 el #'distance-between))
 
 (defun summarize (gpx &key (units 'imperial))
   (let ((eg (elevation-gain gpx))
@@ -175,3 +167,8 @@
   (format t "Total elevation gain: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet eg) eg) shortunit)
   (format t "Total elevation loss: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet el) el) shortunit)
   (format t "Total elevation loss: ~a ~a~%" (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)))
+
+;; (defun find-loop (gpx)
+  
+(defun find-loop (gpx)
+  
