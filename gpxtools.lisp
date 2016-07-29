@@ -80,7 +80,7 @@
 		 (make-gpx-pt :lat lat :lon lon :ele ele))))
 
 	 (xpath:with-namespaces
-	  (("gpx" "http://www.topografix.com/GPX/1/0"))
+	  (("gpx" (xpath:evaluate "namespace-uri(/*)" doc)))
 	  (xpath:do-node-set
 	   (node (xpath:evaluate "/gpx:gpx/gpx:trk" doc))
 	   (setf rval (cons (process-track node) rval)))))
@@ -185,7 +185,7 @@
         (longunit (if (eq units 'imperial) "miles" "kilometers")))
   (format t "Total elevation gain: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet eg) eg) shortunit)
   (format t "Total elevation loss: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet el) el) shortunit)
-  (format t "Total elevation loss: ~a ~a~%" (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)))
+  (format t "Total distance:       ~a ~a~%" (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)))
 
 (defun elevation-plot (gpx &key (file-name))
   (let ((all-pts (collect-points gpx))
