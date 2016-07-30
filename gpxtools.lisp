@@ -121,7 +121,7 @@
 		 (make-gpx-pt :lat lat :lon lon :ele ele :time time))))
 
 	 (xpath:with-namespaces
-	  (("gpx" "http://www.topografix.com/GPX/1/0"))
+	  (("gpx" (xpath:evaluate "namespace-uri(/*)" doc)))
 	  (xpath:do-node-set
 	   (node (xpath:evaluate "/gpx:gpx/gpx:trk" doc))
 	   (setf rval (cons (process-track node) rval)))))
@@ -235,7 +235,7 @@
         (longunit (if (eq units 'imperial) "miles" "kilometers")))
   (format t "Total elevation gain: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet eg) eg) shortunit)
   (format t "Total elevation loss: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet el) el) shortunit)
-  (format t "Total distance: ~a ~a~%" (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)))
+  (format t "Total distance:       ~a ~a~%" (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)))
 
 (defun elevation-plot (gpx &key (file-name))
   (let ((all-pts (collect-points gpx))
@@ -269,15 +269,14 @@
 
     (loop for i in (cdr all-pts) do
           (let ((this-dist (distance-between cur-pt i)))
-            (if (> this-dist dist)
-                (progn
-                  (setf cur-pt i)
-                  (push cur-pt new-pts)))))
+            (cond ((> this-dist dist)
+                   (setf cur-pt i)
+                   (push cur-pt new-pts)))))
 
     
     (make-gpx-file
      :tracks (list (make-gpx-track
-                    :segments (list (make-gpx-segment :points new-pts :point-count (length new-pts)))
+                    :segments (list (make-gpx-segment :points (reverse new-pts) :point-count (length new-pts)))
                     :name "Simplified")))))
                    
 
