@@ -25,8 +25,8 @@
   (lon 0.0 :type double-float)
   (ele 0.0 :type double-float))
 
-(defun to-utm (pt)
-  (let ((utm (utm:lat-lon-to-utm (gpx-pt-lat pt) (gpx-pt-lon pt))))
+(defun to-utm (pt &key (zone nil))
+  (let ((utm (utm:lat-lon-to-utm (gpx-pt-lat pt) (gpx-pt-lon pt) :zone zone)))
 	(make-utm-pt :easting (car utm) :northing (cadr utm) :zone (caddr utm) :ele (gpx-pt-ele pt))))
 
 (defstruct gpx-segment
@@ -88,7 +88,7 @@
 
 (defun distance-between (p1 p2)
   (let* ((pt1 (to-utm p1))
-		 (pt2 (to-utm p2))
+		 (pt2 (to-utm p2 :zone (utm-pt-zone pt1) ))
 		 (ndiff (- (utm-pt-northing pt1) (utm-pt-northing pt2)))
 		 (ediff (- (utm-pt-easting pt1) (utm-pt-easting pt2)))
 		 (eldiff (- (utm-pt-ele pt1) (utm-pt-ele pt2)))
