@@ -22,10 +22,10 @@
            #:gpx-segment-points
            #:gpx-segment-point-count
 
-           #:gpx-point-lat
-           #:gpx-point-lon
-           #:gpx-point-ele
-           #:gpx-point-time
+           #:gpx-pt-lat
+           #:gpx-pt-lon
+           #:gpx-pt-ele
+           #:gpx-pt-time
 
            #:gpx-file-from-track
            ))
