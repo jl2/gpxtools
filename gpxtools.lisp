@@ -93,7 +93,6 @@
             (xpath:do-node-set
              (node (xpath:evaluate "gpx:trkseg" track-node))
              (let ((name (xpath:evaluate "string(gpx:name)" track-node)))
-               (format t "Processing track: ~a~%" name)
                (setf tname name))
              (setf segs (cons (process-trackseg node) segs)))
             (make-gpx-track :segments segs :name tname)))
