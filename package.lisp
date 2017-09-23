@@ -27,6 +27,9 @@
            #:gpx-pt-ele
            #:gpx-pt-time
 
+           #:lat
+           #:lon
+           #:ele
            #:gpx-file-from-track
            ))
 
