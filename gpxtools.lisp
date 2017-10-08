@@ -13,6 +13,8 @@
    (in str)
    (coerce (read in) 'double-float)))
 
+(defgeneric to-vec3 (pt))
+
 (defstruct utm-pt
   (northing 0.0 :type double-float)
   (easting 0.0 :type double-float)
@@ -26,9 +28,13 @@
   (ele 0.0 :type double-float)
   (time "" :type string))
 
+(defmethod to-vec3 ((pt gpx-pt))
+  (with-slots (lat lon ele) pt
+    (values (vec3 lat lon ele))))
+
 (defun to-utm (pt &key (zone nil))
   (let ((utm (utm:lat-lon-to-utm (gpx-pt-lat pt) (gpx-pt-lon pt) :zone zone)))
-	(make-utm-pt :easting (car utm) :northing (cadr utm) :zone (caddr utm) :ele (gpx-pt-ele pt))))
+    (make-utm-pt :easting (car utm) :northing (cadr utm) :zone (caddr utm) :ele (gpx-pt-ele pt))))
 
 (defstruct gpx-segment
   (points () :type list)
@@ -46,10 +52,10 @@
   (tracks () :type list))
 
 (defun format-iso (tm)
-    (multiple-value-bind (sec min hr day mon yr dow dst-p tz)
-                         (decode-universal-time tm)
-                         (declare (ignore dow dst-p tz))
-                         (format nil "~4,'0d-~2,'0d-~2,'0dT~2,'0d:~2,'0d:~2,'0dZ" yr mon day hr min sec)))
+  (multiple-value-bind (sec min hr day mon yr dow dst-p tz)
+      (decode-universal-time tm)
+    (declare (ignore dow dst-p tz))
+    (format nil "~4,'0d-~2,'0d-~2,'0dT~2,'0d:~2,'0d:~2,'0dZ" yr mon day hr min sec)))
 
 (defgeneric write-gpx (el stream)
   (:documentation "Write a GPX element to a file."))
@@ -64,78 +70,78 @@
 (defmethod write-gpx ((seg gpx-segment) (stm stream))
   (format stm "<trkseg>")
   (loop for i in (gpx-segment-points seg) do
-        (write-gpx i stm))
+       (write-gpx i stm))
   (format stm "</trkseg>"))
 
 (defmethod write-gpx ((track gpx-track) (stm stream))
   (format stm "<trk><name>~a</name>" (gpx-track-name track))
   (loop for seg in (gpx-track-segments track) do
-        (write-gpx seg stm))
+       (write-gpx seg stm))
   (format stm "</trk>"))
 
 (defmethod write-gpx ((file gpx-file) (file-name string))
   (with-open-file
-   (stream file-name :direction :output)
-   (format stream "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.0\" creator=\"gpxtools\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://www.topografix.com/GPX/1/0\" xsi:schemaLocation=\"http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd\">")
-   (format stream "<time>~a</time>" (format-iso (get-universal-time)))
-   (loop for track in (gpx-file-tracks file) do
+      (stream file-name :direction :output)
+    (format stream "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.0\" creator=\"gpxtools\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://www.topografix.com/GPX/1/0\" xsi:schemaLocation=\"http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd\">")
+    (format stream "<time>~a</time>" (format-iso (get-universal-time)))
+    (loop for track in (gpx-file-tracks file) do
          (write-gpx track stream))
-   (format stream "</gpx>")))
+    (format stream "</gpx>")))
 
 (defun read-gpx (file-name)
   (let ((doc (cxml:parse-file file-name (cxml-dom:make-dom-builder)))
-		(rval ()))
-	(labels
-	 ((process-track
-	  (track-node)
-	  (let ((segs ())
-                (tname ""))
-            (xpath:do-node-set
-             (node (xpath:evaluate "gpx:trkseg" track-node))
-             (let ((name (xpath:evaluate "string(gpx:name)" track-node)))
-               (setf tname name))
-             (setf segs (cons (process-trackseg node) segs)))
-            (make-gpx-track :segments segs :name tname)))
+        (rval ()))
+    (labels
+        ((process-track
+             (track-node)
+           (let ((segs ())
+                 (tname ""))
+             (xpath:do-node-set
+                 (node (xpath:evaluate "gpx:trkseg" track-node))
+               (let ((name (xpath:evaluate "string(gpx:name)" track-node)))
+                 (setf tname name))
+               (setf segs (cons (process-trackseg node) segs)))
+             (make-gpx-track :segments segs :name tname)))
 
-	  (process-trackseg
-	   (seg-node)
+         (process-trackseg
+             (seg-node)
 	   (let ((track (make-gpx-segment)))
              (xpath:do-node-set
-              (node (xpath:evaluate "gpx:trkpt" seg-node))
-              (let ((np (process-trackpt node)))
-			(setf (gpx-segment-points track) (cons np (gpx-segment-points track)))
-			(setf (gpx-segment-max-lat track) (max (gpx-pt-lat np) (gpx-segment-max-lat track)))
-			(setf (gpx-segment-min-lat track) (min (gpx-pt-lat np) (gpx-segment-min-lat track)))
-			(setf (gpx-segment-max-lon track) (max (gpx-pt-lon np) (gpx-segment-max-lon track)))
-			(setf (gpx-segment-min-lon track) (min (gpx-pt-lon np) (gpx-segment-min-lon track)))
-			(incf (gpx-segment-point-count track))))
-		 track))
+                 (node (xpath:evaluate "gpx:trkpt" seg-node))
+               (let ((np (process-trackpt node)))
+                 (setf (gpx-segment-points track) (cons np (gpx-segment-points track)))
+                 (setf (gpx-segment-max-lat track) (max (gpx-pt-lat np) (gpx-segment-max-lat track)))
+                 (setf (gpx-segment-min-lat track) (min (gpx-pt-lat np) (gpx-segment-min-lat track)))
+                 (setf (gpx-segment-max-lon track) (max (gpx-pt-lon np) (gpx-segment-max-lon track)))
+                 (setf (gpx-segment-min-lon track) (min (gpx-pt-lon np) (gpx-segment-min-lon track)))
+                 (incf (gpx-segment-point-count track))))
+             track))
 
-	  (process-trackpt
-	   (pt-node)
+         (process-trackpt
+             (pt-node)
 	   (let ((lat (string-to-float (xpath:evaluate "string(@lat)" pt-node)))
-			 (lon (string-to-float (xpath:evaluate "string(@lon)" pt-node)))
-			 (ele (string-to-float (xpath:evaluate "string(gpx:ele)" pt-node)))
-                         (time (xpath:evaluate "string(gpx:time)" pt-node)))
-		 (make-gpx-pt :lat lat :lon lon :ele ele :time time))))
+                 (lon (string-to-float (xpath:evaluate "string(@lon)" pt-node)))
+                 (ele (string-to-float (xpath:evaluate "string(gpx:ele)" pt-node)))
+                 (time (xpath:evaluate "string(gpx:time)" pt-node)))
+             (make-gpx-pt :lat lat :lon lon :ele ele :time time))))
 
-	 (xpath:with-namespaces
+      (xpath:with-namespaces
 	  (("gpx" (xpath:evaluate "namespace-uri(/*)" doc)))
-	  (xpath:do-node-set
-	   (node (xpath:evaluate "/gpx:gpx/gpx:trk" doc))
-	   (setf rval (cons (process-track node) rval)))))
-	(make-gpx-file :tracks rval)))
+        (xpath:do-node-set
+            (node (xpath:evaluate "/gpx:gpx/gpx:trk" doc))
+          (setf rval (cons (process-track node) rval)))))
+    (make-gpx-file :tracks rval)))
 
 (defun distance-between (p1 p2)
   (let* ((pt1 (to-utm p1))
-		 (pt2 (to-utm p2 :zone (utm-pt-zone pt1) ))
-		 (ndiff (- (utm-pt-northing pt1) (utm-pt-northing pt2)))
-		 (ediff (- (utm-pt-easting pt1) (utm-pt-easting pt2)))
-		 (eldiff (- (utm-pt-ele pt1) (utm-pt-ele pt2)))
-		 (ndiff2 (* ndiff ndiff))
-		 (ediff2 (* ediff ediff))
-		 (eldiff2 (* eldiff eldiff)))
-	(sqrt (+ ndiff2 ediff2 eldiff2))))
+         (pt2 (to-utm p2 :zone (utm-pt-zone pt1) ))
+         (ndiff (- (utm-pt-northing pt1) (utm-pt-northing pt2)))
+         (ediff (- (utm-pt-easting pt1) (utm-pt-easting pt2)))
+         (eldiff (- (utm-pt-ele pt1) (utm-pt-ele pt2)))
+         (ndiff2 (* ndiff ndiff))
+         (ediff2 (* ediff ediff))
+         (eldiff2 (* eldiff eldiff)))
+    (sqrt (+ ndiff2 ediff2 eldiff2))))
 
 ;; (defgeneric distance (el)
 ;;   (:documentation "Compute the distance of the element."))
@@ -160,51 +166,49 @@
 
 (defun ele-gain (p1 p2)
   (let ((diff (elevation-diff p1 p2)))
-	(if (< 0.0 diff)
-		diff
-	  0.0)))
+    (if (< 0.0 diff)
+        diff
+        0.0)))
 
 (defun ele-loss (p1 p2)
   (let ((diff (elevation-diff p1 p2)))
-	(if (> 0.0 diff)
-		diff
-	  0.0)))
+    (if (> 0.0 diff)
+        diff
+        0.0)))
 
 (defgeneric traverse2 (el func)
   (:documentation "Traverse the GPX element and sum the results of (func point[i] point[i+1])"))
 
 (defmethod traverse2 ((seg gpx-segment) func)
   (loop for i in (gpx-segment-points seg)
-        for j in (cdr (gpx-segment-points seg))
-        summing (apply func (list i j)) into total
-        finally (return total)))
-  
+     for j in (cdr (gpx-segment-points seg))
+     summing (apply func (list i j)) into total
+     finally (return total)))
+
 (defmethod traverse2 ((track gpx-track) func)
   (loop for seg in (gpx-track-segments track)
-		summing (traverse2 seg func) into total
-		finally (return total)))
+     summing (traverse2 seg func) into total
+     finally (return total)))
 
 (defmethod traverse2 ((file gpx-file) func)
   (loop for track in (gpx-file-tracks file)
-		summing (traverse2 track func)))
+     summing (traverse2 track func)))
 
 (defgeneric collect-points (el)
   (:documentation "Traverse the GPX element and sum the results of (func point[i] point[i+1])"))
 
 (defmethod collect-points ((seg gpx-segment))
   (gpx-segment-points seg))
-  
+
 (defmethod collect-points ((track gpx-track))
-  (let ((rval ()))
-    (loop for seg in (gpx-track-segments track)
-          appending (collect-points seg) into rval
-          finally (return rval))))
+  (loop for seg in (gpx-track-segments track)
+     appending (collect-points seg) into rval
+     finally (return rval)))
 
 (defmethod collect-points ((file gpx-file))
-  (let ((rval ()))
-    (loop for track in (gpx-file-tracks file)
-          appending (collect-points track) into rval
-          finally (return rval))))
+  (loop for track in (gpx-file-tracks file)
+     appending (collect-points track) into rval
+     finally (return rval)))
 
 (defun elevation-gain (el)
   (traverse2 el #'ele-gain))
@@ -281,3 +285,69 @@
 
 (defun gpx-file-from-track (track)
   (make-gpx-file :tracks (list track)))
+
+(defun read-directory (directory)
+  (let* ((files (directory (format nil "~a/*.gpx" directory)))
+         (all-points (apply
+                      (curry #'concatenate 'list)
+                      (mapcar
+                       (compose (curry #'mapcar #'to-vec3) #'gpxtools:collect-points #'gpxtools:read-gpx)
+                       files))))
+    (make-array (length all-points) :element-type 'vec3 :initial-contents all-points :adjustable nil)))
+
+(defun bounding-box (points)
+  (loop for pt in points
+     minimizing (vx pt) into min-lat
+     maximizing (vx pt) into max-lat
+     minimizing (vy pt) into min-lon
+     maximizing (vy pt) into max-lon
+     minimizing (vz pt) into min-ele
+     maximizing (vz pt) into max-ele
+     finally (return (values min-lat max-lat min-lon max-lon min-ele max-ele))))
+
+(defun build-kdtree ()
+  )
+
+(defun find-segments (points)
+  ;; (multiple-value-bind (min-lat max-lat min-lon max-lon min-ele max-ele) (bounding-box points)
+  ;;   ))
+
+  (format t "Total number of points: ~a~%" (length points)))
+  
+(defun gpx-heatmap (directory &key (style :points))
+  (let* ((gpx-pts (make-instance 'primitives))
+         (files (directory (format nil "~a/*.gpx" directory)))
+         (all-points (apply (curry #'concatenate 'list) (mapcar (compose #'gpxtools:collect-points #'gpxtools:read-gpx) files))))
+    (multiple-value-bind (min-lat max-lat min-lon max-lon min-ele max-ele) (bounding-box all-points)
+      (cond ((eq style :points)
+             (dolist (gpt all-points)
+               (multiple-value-bind (y-value x-value z-value) (map-pt (gpxtools:gpx-pt-lat gpt)
+                                                                      (gpxtools:gpx-pt-lon gpt)
+                                                                      (gpxtools:gpx-pt-ele gpt)
+                                                                      min-lat max-lat
+                                                                      min-lon max-lon
+                                                                      min-ele max-ele)
+                 (add-point gpx-pts (vec3
+                                     x-value
+                                     y-value
+                                     z-value)
+                            (vec4 0 1 0 0.25)))))
+            ((eq style :lines)
+             (loop for (first second) on all-points by #'cddr do
+                  (multiple-value-bind (y1 x1 z1) (map-pt (gpxtools:gpx-pt-lat first)
+                                                                         (gpxtools:gpx-pt-lon first)
+                                                                         (gpxtools:gpx-pt-ele first)
+                                                                         min-lat max-lat
+                                                                         min-lon max-lon
+                                                                         min-ele max-ele)
+                    (multiple-value-bind (y2 x2 z2) (map-pt (gpxtools:gpx-pt-lat second)
+                                                                         (gpxtools:gpx-pt-lon second)
+                                                                         (gpxtools:gpx-pt-ele second)
+                                                                         min-lat max-lat
+                                                                         min-lon max-lon
+                                                                         min-ele max-ele)
+                      (add-line  gpx-pts
+                                 (vec3 x1 y1 z1)
+                                 (vec3 x2 y2 z2)
+                                 (vec4 0 1 0 0.25))))))))
+    gpx-pts))

@@ -1,8 +1,9 @@
 ;;;; package.lisp
 
 (defpackage #:gpxtools
-  (:use #:cl)
-  (:export #:read-gpx
+  (:use #:cl #:3d-vectors #:alexandria)
+  (:export
+   #:read-gpx
            #:distance
            #:elevation-gain
            #:elevation-loss
@@ -26,6 +27,9 @@
            #:gpx-pt-lon
            #:gpx-pt-ele
            #:gpx-pt-time
+
+           #:read-directory
+           #:find-segments
 
            #:lat
            #:lon
