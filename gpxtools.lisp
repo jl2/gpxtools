@@ -13,42 +13,65 @@
    (in str)
    (coerce (read in) 'double-float)))
 
-(defstruct utm-pt
-  (northing 0.0 :type double-float)
-  (easting 0.0 :type double-float)
-  (zone 0 :type fixnum)
-  (ele 0.0 :type double-float))
+(defgeneric to-v3 (pt))
+
+(defclass utm-pt ()
+  ((pt :initarg :pt :type vec3)
+   (zone :initarg :zone :type fixnum)))
+
+(defclass gpx-pt ()
+  ((pt :initarg :pt :type vec3)
+   (time :initarg :time :type string)))
 
 
-(defstruct gpx-pt
-  (lat 0.0 :type double-float)
-  (lon 0.0 :type double-float)
-  (ele 0.0 :type double-float)
-  (time "" :type string))
+(defun lat (pt)
+  (vx (slot-value pt 'pt)))
+
+(defun latitude (pt)
+  (lat pt))
+
+
+(defun lon (pt)
+  (vy (slot-value pt 'pt)))
+
+(defun longitude (pt)
+  (lon pt))
+
+
+(defun ele (pt)
+  (vz (slot-value pt 'pt)))
+
+(defun elevation (pt)
+  (ele pt))
+
+(defun pt-time (pt)
+  (slot-value pt 'time))
+
 
 (defun to-utm (pt &key (zone nil))
-  (let ((utm (utm:lat-lon-to-utm (gpx-pt-lat pt) (gpx-pt-lon pt) :zone zone)))
-	(make-utm-pt :easting (car utm) :northing (cadr utm) :zone (caddr utm) :ele (gpx-pt-ele pt))))
+  (let ((utm (utm:lat-lon-to-utm (lat pt) (lon pt) :zone zone)))
+	(make-instance 'utm-pt :pt (vec3 (car utm) (cadr utm) (ele pt)) :zone (caddr utm))))
 
-(defstruct gpx-segment
-  (points () :type list)
-  (point-count 0 :type integer)
-  (max-lat -361.0d0 :type double-float)
-  (min-lat 361.0d0 :type double-float)
-  (max-lon -361.0d0 :type double-float)
-  (min-lon 361.0d0 :type double-float))
 
-(defstruct gpx-track
-  (name "" :type string)
-  (segments () :type list))
+(defclass gpx-segment ()
+  ((points :initform nil :initarg :points :type list)
+  (point-count :initform 0 :initarg :point-count :type fixnum)
+  (max-lat :initform -361.0)
+  (min-lat :initform 361.0)
+  (max-lon :initform -361.0)
+  (min-lon :initform 361.0)))
 
-(defstruct gpx-file
-  (tracks () :type list))
+(defclass gpx-track ()
+  ((name :initform "" :initarg :name :type string)
+   (segments :initform () :initarg :segments :type list)))
+
+(defclass gpx-file ()
+  ((tracks :initform () :initarg :tracks :type list)))
 
 (defun format-iso (tm)
     (multiple-value-bind (sec min hr day mon yr dow dst-p tz)
                          (decode-universal-time tm)
-                         (declare (ignore dow dst-p tz))
+                         (declare (ignorable dow dst-p tz))
                          (format nil "~4,'0d-~2,'0d-~2,'0dT~2,'0d:~2,'0d:~2,'0dZ" yr mon day hr min sec)))
 
 (defgeneric write-gpx (el stream)
@@ -56,20 +79,20 @@
 
 (defmethod write-gpx ((pt gpx-pt) (stm stream))
   (format stm "<trkpt lat=\"~,9f\" lon=\"~,9f\"><ele>~,9f</ele><time>~a</time></trkpt>~%"
-          (gpx-pt-lat pt)
-          (gpx-pt-lon pt)
-          (gpx-pt-ele pt)
-          (gpx-pt-time pt)))
+          (lat pt)
+          (lon pt)
+          (ele pt)
+          (pt-time pt)))
 
 (defmethod write-gpx ((seg gpx-segment) (stm stream))
   (format stm "<trkseg>")
-  (loop for i in (gpx-segment-points seg) do
+  (loop for i in (slot-value seg 'segment-points) do
         (write-gpx i stm))
   (format stm "</trkseg>"))
 
 (defmethod write-gpx ((track gpx-track) (stm stream))
-  (format stm "<trk><name>~a</name>" (gpx-track-name track))
-  (loop for seg in (gpx-track-segments track) do
+  (format stm "<trk><name>~a</name>" (slot-value track 'track-name))
+  (loop for seg in (slot-value track 'track-segments) do
         (write-gpx seg stm))
   (format stm "</trk>"))
 
@@ -78,7 +101,7 @@
    (stream file-name :direction :output)
    (format stream "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.0\" creator=\"gpxtools\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://www.topografix.com/GPX/1/0\" xsi:schemaLocation=\"http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd\">")
    (format stream "<time>~a</time>" (format-iso (get-universal-time)))
-   (loop for track in (gpx-file-tracks file) do
+   (loop for track in (slot-value file 'file-tracks) do
          (write-gpx track stream))
    (format stream "</gpx>")))
 
@@ -95,19 +118,19 @@
              (let ((name (xpath:evaluate "string(gpx:name)" track-node)))
                (setf tname name))
              (setf segs (cons (process-trackseg node) segs)))
-            (make-gpx-track :segments segs :name tname)))
+            (make-instance 'gpx-track :segments segs :name tname)))
 
 	  (process-trackseg
 	   (seg-node)
-	   (let ((track (make-gpx-segment)))
+	   (let ((track (make-instance 'gpx-segment)))
              (xpath:do-node-set
               (node (xpath:evaluate "gpx:trkpt" seg-node))
               (let ((np (process-trackpt node)))
 			(setf (gpx-segment-points track) (cons np (gpx-segment-points track)))
-			(setf (gpx-segment-max-lat track) (max (gpx-pt-lat np) (gpx-segment-max-lat track)))
-			(setf (gpx-segment-min-lat track) (min (gpx-pt-lat np) (gpx-segment-min-lat track)))
-			(setf (gpx-segment-max-lon track) (max (gpx-pt-lon np) (gpx-segment-max-lon track)))
-			(setf (gpx-segment-min-lon track) (min (gpx-pt-lon np) (gpx-segment-min-lon track)))
+			(setf (gpx-segment-max-lat track) (max (lat np) (gpx-segment-max-lat track)))
+			(setf (gpx-segment-min-lat track) (min (lat np) (gpx-segment-min-lat track)))
+			(setf (gpx-segment-max-lon track) (max (lon np) (gpx-segment-max-lon track)))
+			(setf (gpx-segment-min-lon track) (min (lon np) (gpx-segment-min-lon track)))
 			(incf (gpx-segment-point-count track))))
 		 track))
 
@@ -117,7 +140,7 @@
 			 (lon (string-to-float (xpath:evaluate "string(@lon)" pt-node)))
 			 (ele (string-to-float (xpath:evaluate "string(gpx:ele)" pt-node)))
                          (time (xpath:evaluate "string(gpx:time)" pt-node)))
-		 (make-gpx-pt :lat lat :lon lon :ele ele :time time))))
+		 (make-instance 'gpx-pt  :pt (vec3 lat lon ele) :time time))))
 
 	 (xpath:with-namespaces
 	  (("gpx" (xpath:evaluate "namespace-uri(/*)" doc)))
@@ -195,16 +218,14 @@
   (gpx-segment-points seg))
   
 (defmethod collect-points ((track gpx-track))
-  (let ((rval ()))
-    (loop for seg in (gpx-track-segments track)
-          appending (collect-points seg) into rval
-          finally (return rval))))
+  (loop for seg in (gpx-track-segments track)
+     appending (collect-points seg) into rval
+     finally (return rval)))
 
 (defmethod collect-points ((file gpx-file))
-  (let ((rval ()))
-    (loop for track in (gpx-file-tracks file)
+  (loop for track in (gpx-file-tracks file)
           appending (collect-points track) into rval
-          finally (return rval))))
+     finally (return rval)))
 
 (defun elevation-gain (el)
   (traverse2 el #'ele-gain))
@@ -232,34 +253,34 @@
         (dist (distance gpx))
         (shortunit (if (eq units 'imperial) "feet" "meters"))
         (longunit (if (eq units 'imperial) "miles" "kilometers")))
-  (format t "Total elevation gain: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet eg) eg) shortunit)
-  (format t "Total elevation loss: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet el) el) shortunit)
-  (format t "Total distance:       ~a ~a~%" (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)))
+    (format t "Total elevation gain: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet eg) eg) shortunit)
+    (format t "Total elevation loss: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet el) el) shortunit)
+    (format t "Total distance:       ~a ~a~%" (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)))
 
 (defun elevation-plot (gpx &key (file-name))
   (let ((all-pts (collect-points gpx))
         (total-distance 0.0)
         (new-points ()))
     (loop for i in all-pts
-          for j in (cdr all-pts)
-          do
-          (incf total-distance (distance-between i j))
-          (push (list (meters-to-miles total-distance) (meters-to-feet (gpx-pt-ele i))) new-points))
+       for j in (cdr all-pts)
+       do
+         (incf total-distance (distance-between i j))
+         (push (list (meters-to-miles total-distance) (meters-to-feet (gpx-pt-ele i))) new-points))
     (adw-charting:with-chart (:line 1600 1200)
-                             (adw-charting:add-series "Elevation" new-points)
-                             (adw-charting:set-axis :y "Elevation (feet)")
-                             (adw-charting:set-axis :x "Distance (miles)")
-                             (adw-charting:save-file file-name))))
+      (adw-charting:add-series "Elevation" new-points)
+      (adw-charting:set-axis :y "Elevation (feet)")
+      (adw-charting:set-axis :x "Distance (miles)")
+      (adw-charting:save-file file-name))))
 
 (defun find-loop (gpx &key (eps 0.001))
   (let* ((all-pts (collect-points gpx))
          (first-pt (car all-pts)))
     (format t "Checking ~a points~%" (length all-pts))
     (loop for i in (cdr all-pts)
-          for j upto (- (length all-pts) 1) do
-          (let ((this-dist (distance-between first-pt i)))
-            (if (< this-dist eps)
-                (format t "Point ~a is ~a meters away from the start!~%" j this-dist))))))
+       for j upto (- (length all-pts) 1) do
+         (let ((this-dist (distance-between first-pt i)))
+           (if (< this-dist eps)
+               (format t "Point ~a is ~a meters away from the start!~%" j this-dist))))))
 
 (defun simplify (gpx &key (dist 0.1))
   (let* ((all-pts (collect-points gpx))
@@ -267,17 +288,29 @@
          (new-pts (list cur-pt)))
 
     (loop for i in (cdr all-pts) do
-          (let ((this-dist (distance-between cur-pt i)))
-            (cond ((> this-dist dist)
-                   (setf cur-pt i)
-                   (push cur-pt new-pts)))))
+         (let ((this-dist (distance-between cur-pt i)))
+           (cond ((> this-dist dist)
+                  (setf cur-pt i)
+                  (push cur-pt new-pts)))))
 
     
     (make-gpx-file
      :tracks (list (make-gpx-track
                     :segments (list (make-gpx-segment :points (reverse new-pts) :point-count (length new-pts)))
                     :name "Simplified")))))
-                   
+
 
 (defun gpx-file-from-track (track)
   (make-gpx-file :tracks (list track)))
+
+(defun read-directory (directory)
+  (let* ((files (directory (format nil "~a/*.gpx" directory)))
+         (all-points (apply
+                      (curry #'concatenate 'list)
+                      (mapcar
+                       (compose #'gpxtools:collect-points #'gpxtools:read-gpx)
+                       files))))
+    all-points))
+
+(defun find-segments (points)
+  (format t "Total number of points: ~a~%" (length points)))
