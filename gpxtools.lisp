@@ -286,7 +286,7 @@
 (defun gpx-file-from-track (track)
   (make-gpx-file :tracks (list track)))
 
-(defun read-directory (directory)
+(defun read-directory-to-points (directory)
   (let* ((files (directory (format nil "~a/*.gpx" directory)))
          (all-points (apply
                       (curry #'concatenate 'list)
@@ -295,59 +295,20 @@
                        files))))
     (make-array (length all-points) :element-type 'vec3 :initial-contents all-points :adjustable nil)))
 
-(defun bounding-box (points)
-  (loop for pt in points
-     minimizing (vx pt) into min-lat
-     maximizing (vx pt) into max-lat
-     minimizing (vy pt) into min-lon
-     maximizing (vy pt) into max-lon
-     minimizing (vz pt) into min-ele
-     maximizing (vz pt) into max-ele
-     finally (return (values min-lat max-lat min-lon max-lon min-ele max-ele))))
 
-(defun build-kdtree ()
-  )
 
-(defun find-segments (points)
-  ;; (multiple-value-bind (min-lat max-lat min-lon max-lon min-ele max-ele) (bounding-box points)
-  ;;   ))
-
-  (format t "Total number of points: ~a~%" (length points)))
-  
-(defun gpx-heatmap (directory &key (style :points))
-  (let* ((gpx-pts (make-instance 'primitives))
-         (files (directory (format nil "~a/*.gpx" directory)))
-         (all-points (apply (curry #'concatenate 'list) (mapcar (compose #'gpxtools:collect-points #'gpxtools:read-gpx) files))))
-    (multiple-value-bind (min-lat max-lat min-lon max-lon min-ele max-ele) (bounding-box all-points)
-      (cond ((eq style :points)
-             (dolist (gpt all-points)
-               (multiple-value-bind (y-value x-value z-value) (map-pt (gpxtools:gpx-pt-lat gpt)
-                                                                      (gpxtools:gpx-pt-lon gpt)
-                                                                      (gpxtools:gpx-pt-ele gpt)
-                                                                      min-lat max-lat
-                                                                      min-lon max-lon
-                                                                      min-ele max-ele)
-                 (add-point gpx-pts (vec3
-                                     x-value
-                                     y-value
-                                     z-value)
-                            (vec4 0 1 0 0.25)))))
-            ((eq style :lines)
-             (loop for (first second) on all-points by #'cddr do
-                  (multiple-value-bind (y1 x1 z1) (map-pt (gpxtools:gpx-pt-lat first)
-                                                                         (gpxtools:gpx-pt-lon first)
-                                                                         (gpxtools:gpx-pt-ele first)
-                                                                         min-lat max-lat
-                                                                         min-lon max-lon
-                                                                         min-ele max-ele)
-                    (multiple-value-bind (y2 x2 z2) (map-pt (gpxtools:gpx-pt-lat second)
-                                                                         (gpxtools:gpx-pt-lon second)
-                                                                         (gpxtools:gpx-pt-ele second)
-                                                                         min-lat max-lat
-                                                                         min-lon max-lon
-                                                                         min-ele max-ele)
-                      (add-line  gpx-pts
-                                 (vec3 x1 y1 z1)
-                                 (vec3 x2 y2 z2)
-                                 (vec4 0 1 0 0.25))))))))
-    gpx-pts))
+(defun read-directory-to-segments (directory)
+  (let* ((files (directory (format nil "~a/*.gpx" directory)))
+         (all-segments (apply
+                      (curry #'concatenate 'list)
+                      (mapcar
+                       (compose (lambda (points)
+                                  (loop
+                                     for (from goes-to) on points by #'cdr
+                                     when goes-to
+                                     collect (cons from goes-to)))
+                                (curry #'mapcar #'to-vec3)
+                                #'gpxtools:collect-points
+                                #'gpxtools:read-gpx)
+                       files))))
+    (make-array (length all-segments) :element-type 'vec3 :initial-contents all-segments :adjustable nil)))

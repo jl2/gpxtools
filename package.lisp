@@ -28,7 +28,8 @@
            #:gpx-pt-ele
            #:gpx-pt-time
 
-           #:read-directory
+           #:read-directory-to-points
+           #:read-directory-to-segments
            #:find-segments
 
            #:lat

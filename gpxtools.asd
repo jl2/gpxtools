@@ -10,7 +10,6 @@
                #:xpath
                #:alexandria
                #:utm
-               #:kdtree
                #:3d-vectors
                #:3d-matrices
                #:adw-charting
