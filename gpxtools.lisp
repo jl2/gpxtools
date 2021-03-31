@@ -219,7 +219,7 @@
 (defun distance (el)
   (traverse2 el #'distance-between))
 
-(defun get-summary (gpx &key (units 'imperial))
+(defun get-summary (gpx &key (units 'metric))
   (let ((eg (elevation-gain gpx))
         (el (elevation-loss gpx))
         (dist (distance gpx))
@@ -230,7 +230,7 @@
      (list 'total-elevation-lost (if (eq units 'imperial) (meters-to-feet el) el) shortunit)
      (list 'total-distance (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit))))
 
-(defun summarize (gpx &key (units 'imperial))
+(defun summarize (gpx &key (units 'metric))
   (let ((eg (elevation-gain gpx))
         (el (elevation-loss gpx))
         (dist (distance gpx))
