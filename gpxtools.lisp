@@ -9,9 +9,11 @@
   (* (/ 1.0 1609.344) val))
 
 (defun string-to-float (str)
-  (with-input-from-string
+  (if (string/= str "")
+   (with-input-from-string
    (in str)
-   (coerce (read in) 'double-float)))
+     (coerce (read in) 'double-float))
+   0.0d0)) ; If string is empty, just return zero.
 
 (defgeneric to-vec3 (pt))
 
