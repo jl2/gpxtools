@@ -9,9 +9,11 @@
   (* (/ 1.0 1609.344) val))
 
 (defun string-to-float (str)
-  (with-input-from-string
+  (if (string/= str "")
+   (with-input-from-string
    (in str)
-   (coerce (read in) 'double-float)))
+     (coerce (read in) 'double-float))
+   0.0d0)) ; If string is empty, just return zero.
 
 (defgeneric to-vec3 (pt))
 
@@ -219,26 +221,42 @@
 (defun distance (el)
   (traverse2 el #'distance-between))
 
-(defun get-summary (gpx &key (units 'imperial))
+(defun get-summary (gpx &key (units 'metric))
   (let ((eg (elevation-gain gpx))
         (el (elevation-loss gpx))
         (dist (distance gpx))
         (shortunit (if (eq units 'imperial) "feet" "meters"))
-        (longunit (if (eq units 'imperial) "miles" "kilometers")))
+        (longunit (if (eq units 'imperial) "miles" "kilometers"))
+	(start-end-time (time-range gpx)))
     (list 
      (list 'total-elevation-gain (if (eq units 'imperial) (meters-to-feet eg) eg) shortunit)
      (list 'total-elevation-lost (if (eq units 'imperial) (meters-to-feet el) el) shortunit)
-     (list 'total-distance (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit))))
+     (list 'total-distance (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)
+     (list 'start-time (first start-end-time))
+     (list 'end-time (car (last start-end-time))))))
 
-(defun summarize (gpx &key (units 'imperial))
+(defun summarize (gpx &key (units 'metric))
   (let ((eg (elevation-gain gpx))
         (el (elevation-loss gpx))
         (dist (distance gpx))
         (shortunit (if (eq units 'imperial) "feet" "meters"))
-        (longunit (if (eq units 'imperial) "miles" "kilometers")))
+        (longunit (if (eq units 'imperial) "miles" "kilometers"))
+	(start-end-time (time-range gpx)))
   (format t "Total elevation gain: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet eg) eg) shortunit)
   (format t "Total elevation loss: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet el) el) shortunit)
-  (format t "Total distance:       ~a ~a~%" (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)))
+  (format t "Total distance:       ~a ~a~%" (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)
+  (format t "Start time:        ~a~%" (first start-end-time))
+  (format t "End time:        ~a~%" (car (last start-end-time)))))
+
+(defun time-range (gpx)
+  "Returns a two-member list consisting of the earliest timestamp
+   and the last timestamp in the GPX file"
+  (let ((all-pts (collect-points gpx))
+	(timepoints ()))
+    (loop for i in all-pts
+	  do (push (gpx-pt-time i) timepoints))
+    (let ((sortedtimes (sort timepoints #'string-lessp)))
+      (list (first sortedtimes) (car (last sortedtimes))))))
 
 (defun elevation-plot (gpx &key (file-name))
   (let ((all-pts (collect-points gpx))
