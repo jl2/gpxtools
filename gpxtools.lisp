@@ -12,46 +12,45 @@
 
 (defun string-to-float (str)
   (if (string/= str "")
-   (with-input-from-string (in str)
-     (coerce (read in)
-             'double-float))
-   0.0d0)) ; If string is empty, just return zero.
-
-(defgeneric to-vec3 (pt))
+      (with-input-from-string
+          ;; RaceBox add commas to elevation...
+          (in (remove #\, str))
+        (coerce (read in) 'double-float))
+      ;; If string is empty, just return zero.
+      0.0d0)) 
 
 (defstruct utm-pt
-  (northing 0.0 :type real)
-  (easting 0.0 :type real)
+  (northing 0.0d0 :type double-float)
+  (easting 0.0d0 :type double-float)
   (zone 0 :type fixnum)
-  (ele 0.0 :type real))
-
+  (ele 0.0 :type double-float))
 
 (defstruct gpx-pt
-  (lat 0.0 :type real)
-  (lon 0.0 :type real)
-  (ele 0.0 :type real)
+  (lat 0.0d0 :type double-float)
+  (lon 0.0d0 :type double-float)
+  (ele 0.0d0 :type double-float)
   (time "" :type string))
 
-(defmethod to-vec3 ((pt gpx-pt))
+(defun to-vec3 (pt)
   (with-slots (lat lon ele) pt
-    (values (vec3 lat lon ele))))
+    (vec3 lat lon ele)))
 
 (defun to-utm (pt &key (zone nil))
-  (let ((utm (utm:lat-lon-to-utm (gpx-pt-lat pt)
-                                 (gpx-pt-lon pt)
-                                 :zone zone)))
-    (make-utm-pt :easting (car utm)
-                 :northing (cadr utm)
-                 :zone (caddr utm)
+  (multiple-value-bind (easting northing zone) (utm:lat-lon-to-utm (gpx-pt-lat pt)
+                                                                   (gpx-pt-lon pt)
+                                                                   :zone zone)
+    (make-utm-pt :easting easting
+                 :northing northing
+                 :zone zone
                  :ele (gpx-pt-ele pt))))
 
 (defstruct gpx-segment
   (points () :type list)
   (point-count 0 :type integer)
-  (max-lat -361.0d0 :type double-float)
-  (min-lat 361.0d0 :type double-float)
-  (max-lon -361.0d0 :type double-float)
-  (min-lon 361.0d0 :type double-float))
+  (max-lat -361.0d0 :type real)
+  (min-lat 361.0d0 :type real)
+  (max-lon -361.0d0 :type real)
+  (min-lon 361.0d0 :type real))
 
 (defstruct gpx-track
   (name "" :type string)
@@ -61,6 +60,7 @@
   (tracks () :type list))
 
 (defun format-iso (tm)
+
   (multiple-value-bind (sec min hr day mon yr dow dst-p tz)
       (decode-universal-time tm)
     (declare (ignore dow dst-p tz)
@@ -80,6 +80,7 @@
           (gpx-pt-ele pt)
           (gpx-pt-time pt)))
 
+
 (defmethod write-gpx ((seg gpx-segment) (stm stream))
   (format stm "<trkseg>")
   (loop
@@ -96,18 +97,30 @@
        (write-gpx seg stm))
   (format stm "</trk>"))
 
-(defmethod write-gpx ((file gpx-file) (file-name string))
-  (with-open-file (stream file-name :direction :output)
-    (format stream
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.0\" creator=\"gpxtools\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://www.topografix.com/GPX/1/0\" xsi:schemaLocation=\"http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd\">")
-    (format streama
-            "<time>~a</time>"
-            (format-iso (get-universal-time)))
-    (loop
-      :for track :in (gpx-file-tracks file)
-      :do
-         (write-gpx track stream))
-    (format stream "</gpx>")))
+(defmethod write-gpx ((file gpx-file) (stream stream))
+  (format stream
+          "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.0\" creator=\"gpxtools\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://www.topografix.com/GPX/1/0\" xsi:schemaLocation=\"http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd\">")
+  (format stream
+          "<time>~a</time>"
+          (format-iso (get-universal-time)))
+  (loop
+    :for track :in (gpx-file-tracks file)
+    :do
+       (write-gpx track stream))
+  (format stream "</gpx>"))
+
+(defmethod print-object ((pt gpx-pt) stream)
+  (write-gpx pt stream))
+
+(defmethod print-object ((seg gpx-segment) stream)
+  (write-gpx seg stream))
+
+(defmethod print-object ((track gpx-track) stream)
+  (write-gpx track stream))
+
+(defmethod print-object ((object gpx-file) stream)
+  (write-gpx object stream))
+
 
 (defun read-gpx (file-name)
   (let ((doc (cxml:parse-file file-name (cxml-dom:make-dom-builder)))
@@ -126,7 +139,7 @@
 
          (process-trackseg
              (seg-node)
-	   (let ((track (make-gpx-segment)))
+           (let ((track (make-gpx-segment)))
              (xpath:do-node-set
                  (node (xpath:evaluate "gpx:trkpt" seg-node))
                (let ((np (process-trackpt node)))
@@ -140,14 +153,14 @@
 
          (process-trackpt
              (pt-node)
-	   (let ((lat (string-to-float (xpath:evaluate "string(@lat)" pt-node)))
+           (let ((lat (string-to-float (xpath:evaluate "string(@lat)" pt-node)))
                  (lon (string-to-float (xpath:evaluate "string(@lon)" pt-node)))
                  (ele (string-to-float (xpath:evaluate "string(gpx:ele)" pt-node)))
                  (time (xpath:evaluate "string(gpx:time)" pt-node)))
              (make-gpx-pt :lat lat :lon lon :ele ele :time time))))
 
       (xpath:with-namespaces
-	      (("gpx" (xpath:evaluate "namespace-uri(/*)" doc)))
+          (("gpx" (xpath:evaluate "namespace-uri(/*)" doc)))
         (xpath:do-node-set
             (node (xpath:evaluate "/gpx:gpx/gpx:trk" doc))
           (setf rval (cons (process-track node) rval)))))
@@ -156,9 +169,12 @@
 (defun distance-between (p1 p2)
   (let* ((pt1 (to-utm p1))
          (pt2 (to-utm p2 :zone (utm-pt-zone pt1) ))
-         (ndiff (- (utm-pt-northing pt1) (utm-pt-northing pt2)))
-         (ediff (- (utm-pt-easting pt1) (utm-pt-easting pt2)))
-         (eldiff (- (utm-pt-ele pt1) (utm-pt-ele pt2)))
+         (ndiff (- (utm-pt-northing pt1)
+                   (utm-pt-northing pt2)))
+         (ediff (- (utm-pt-easting pt1)
+                   (utm-pt-easting pt2)))
+         (eldiff (- (utm-pt-ele pt1)
+                    (utm-pt-ele pt2)))
          (ndiff2 (* ndiff ndiff))
          (ediff2 (* ediff ediff))
          (eldiff2 (* eldiff eldiff)))
@@ -169,18 +185,18 @@
 
 ;; (defmethod distance ((seg gpx-segment))
 ;;   (loop for i in (gpx-segment-points seg)
-;; 		for j in (cdr (gpx-segment-points seg))
-;; 		summing (distance-between i j) into total
-;; 		finally (return total)))
+;;          for j in (cdr (gpx-segment-points seg))
+;;          summing (distance-between i j) into total
+;;          finally (return total)))
 
 ;; (defmethod distance ((track gpx-track))
 ;;   (loop for seg in (gpx-track-segments track)
-;; 		summing (distance seg) into total
-;; 		finally (return total)))
+;;          summing (distance seg) into total
+;;          finally (return total)))
 
 ;; (defmethod distance ((file gpx-file))
 ;;   (loop for track in (gpx-file-tracks file)
-;; 		summing (distance track)))
+;;          summing (distance track)))
 
 (defun elevation-diff (p1 p2)
   (- (gpx-pt-ele p1) (gpx-pt-ele p2)))
@@ -201,19 +217,20 @@
   (:documentation "Traverse the GPX element and sum the results of (func point[i] point[i+1])"))
 
 (defmethod traverse2 ((seg gpx-segment) func)
-  (loop for i in (gpx-segment-points seg)
-     for j in (cdr (gpx-segment-points seg))
-     summing (apply func (list i j)) into total
-     finally (return total)))
+  (loop
+    :for i :in (gpx-segment-points seg)
+     :for j :in (cdr (gpx-segment-points seg))
+     :summing (funcall func i j)))
 
 (defmethod traverse2 ((track gpx-track) func)
-  (loop for seg in (gpx-track-segments track)
-     summing (traverse2 seg func) into total
-     finally (return total)))
+  (loop
+    :for seg :in (gpx-track-segments track)
+     :summing (traverse2 seg func)))
 
 (defmethod traverse2 ((file gpx-file) func)
-  (loop for track in (gpx-file-tracks file)
-     summing (traverse2 track func)))
+  (loop
+    :for track :in (gpx-file-tracks file)
+     :summing (traverse2 track func)))
 
 (defgeneric collect-points (el)
   (:documentation "Traverse the GPX element and sum the results of (func point[i] point[i+1])"))
@@ -246,8 +263,8 @@
         (dist (distance gpx))
         (shortunit (if (eq units 'imperial) "feet" "meters"))
         (longunit (if (eq units 'imperial) "miles" "kilometers"))
-	(start-end-time (time-range gpx)))
-    (list 
+    (start-end-time (time-range gpx)))
+    (list
      (list 'total-elevation-gain (if (eq units 'imperial) (meters-to-feet eg) eg) shortunit)
      (list 'total-elevation-lost (if (eq units 'imperial) (meters-to-feet el) el) shortunit)
      (list 'total-distance (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)
@@ -260,7 +277,7 @@
         (dist (distance gpx))
         (shortunit (if (eq units 'imperial) "feet" "meters"))
         (longunit (if (eq units 'imperial) "miles" "kilometers"))
-	(start-end-time (time-range gpx)))
+    (start-end-time (time-range gpx)))
   (format t "Total elevation gain: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet eg) eg) shortunit)
   (format t "Total elevation loss: ~a ~a~%" (if (eq units 'imperial) (meters-to-feet el) el) shortunit)
   (format t "Total distance:       ~a ~a~%" (if (eq units 'imperial) (meters-to-miles dist) (/ dist 1000.0)) longunit)
@@ -271,9 +288,9 @@
   "Returns a two-member list consisting of the earliest timestamp
    and the last timestamp in the GPX file"
   (let ((all-pts (collect-points gpx))
-	(timepoints ()))
+    (timepoints ()))
     (loop for i in all-pts
-	  do (push (gpx-pt-time i) timepoints))
+      do (push (gpx-pt-time i) timepoints))
     (let ((sortedtimes (sort timepoints #'string-lessp)))
       (list (first sortedtimes) (car (last sortedtimes))))))
 
@@ -281,9 +298,9 @@
   (let ((all-pts (collect-points gpx))
         (total-distance 0.0)
         (new-points ()))
-    (loop for i in all-pts
-          for j in (cdr all-pts)
-          do
+    (loop :for i :in all-pts
+          :for j :in (cdr all-pts)
+          :do
           (incf total-distance (distance-between i j))
           (push (list (meters-to-miles total-distance) (meters-to-feet (gpx-pt-ele i))) new-points))
     (adw-charting:with-chart (:line 1600 1200)
@@ -307,18 +324,23 @@
          (cur-pt (car all-pts))
          (new-pts (list cur-pt)))
 
-    (loop for i in (cdr all-pts) do
-          (let ((this-dist (distance-between cur-pt i)))
-            (cond ((> this-dist dist)
-                   (setf cur-pt i)
-                   (push cur-pt new-pts)))))
-
-    
+    ;; (loop :for pt :in all-pts
+    ;;       :for cur-pt = 
+    ;;       :for next-pt :in (cdr all-pts)
+    ;;       :when (distance-between cur-pt ())
+    ;;       :for next-pt :in )
+    (loop
+      :for i :in (cdr all-pts)
+      :for this-dist = (distance-between cur-pt i)
+      :when (> this-dist dist)
+        :do
+           (setf cur-pt i)
+           (push cur-pt new-pts))
     (make-gpx-file
      :tracks (list (make-gpx-track
                     :segments (list (make-gpx-segment :points (reverse new-pts) :point-count (length new-pts)))
                     :name "Simplified")))))
-                   
+
 
 (defun gpx-file-from-track (track)
   (make-gpx-file :tracks (list track)))

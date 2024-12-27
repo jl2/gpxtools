@@ -24,7 +24,7 @@
 
            #:find-loop
            #:simplify
-           #:write-gpx
+           #:print-object
            #:gpx-file-tracks
            #:gpx-track-segments
            #:gpx-segment-points
