@@ -47,10 +47,10 @@
 (defstruct gpx-segment
   (points () :type list)
   (point-count 0 :type integer)
-  (max-lat -361.0d0 :type real)
-  (min-lat 361.0d0 :type real)
-  (max-lon -361.0d0 :type real)
-  (min-lon 361.0d0 :type real))
+  (max-lat -361.0d0 :type double-float)
+  (min-lat 361.0d0 :type double-float)
+  (max-lon -361.0d0 :type double-float)
+  (min-lon 361.0d0 :type double-float))
 
 (defstruct gpx-track
   (name "" :type string)
