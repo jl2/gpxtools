@@ -4,17 +4,24 @@
   (:use #:cl #:3d-vectors #:alexandria)
   (:export
    #:read-gpx
+           #:elevation-plot
+
            #:distance
+
            #:elevation-gain
            #:elevation-loss
-           #:distance-between
            #:elevation-diff
+
+           #:distance-between
+
+           
            #:meters-to-feet
            #:meters-to-miles
+
            #:get-summary
            #:summarize
            #:collect-points
-           #:elevation-plot
+
            #:find-loop
            #:simplify
            #:write-gpx

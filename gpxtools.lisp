@@ -1,4 +1,4 @@
-;;;; gpxtools.lisp
+;; gpxtools.lisp
 
 (in-package #:gpxtools)
 
@@ -6,28 +6,30 @@
   (* 3.281 val))
 
 (defun meters-to-miles (val)
-  (* (/ 1.0 1609.344) val))
+  (* val
+     (/ 1.0
+        1609.344)))
 
 (defun string-to-float (str)
   (if (string/= str "")
-   (with-input-from-string
-   (in str)
-     (coerce (read in) 'double-float))
+   (with-input-from-string (in str)
+     (coerce (read in)
+             'double-float))
    0.0d0)) ; If string is empty, just return zero.
 
 (defgeneric to-vec3 (pt))
 
 (defstruct utm-pt
-  (northing 0.0 :type double-float)
-  (easting 0.0 :type double-float)
+  (northing 0.0 :type real)
+  (easting 0.0 :type real)
   (zone 0 :type fixnum)
-  (ele 0.0 :type double-float))
+  (ele 0.0 :type real))
 
 
 (defstruct gpx-pt
-  (lat 0.0 :type double-float)
-  (lon 0.0 :type double-float)
-  (ele 0.0 :type double-float)
+  (lat 0.0 :type real)
+  (lon 0.0 :type real)
+  (ele 0.0 :type real)
   (time "" :type string))
 
 (defmethod to-vec3 ((pt gpx-pt))
@@ -35,8 +37,13 @@
     (values (vec3 lat lon ele))))
 
 (defun to-utm (pt &key (zone nil))
-  (let ((utm (utm:lat-lon-to-utm (gpx-pt-lat pt) (gpx-pt-lon pt) :zone zone)))
-    (make-utm-pt :easting (car utm) :northing (cadr utm) :zone (caddr utm) :ele (gpx-pt-ele pt))))
+  (let ((utm (utm:lat-lon-to-utm (gpx-pt-lat pt)
+                                 (gpx-pt-lon pt)
+                                 :zone zone)))
+    (make-utm-pt :easting (car utm)
+                 :northing (cadr utm)
+                 :zone (caddr utm)
+                 :ele (gpx-pt-ele pt))))
 
 (defstruct gpx-segment
   (points () :type list)
@@ -56,14 +63,18 @@
 (defun format-iso (tm)
   (multiple-value-bind (sec min hr day mon yr dow dst-p tz)
       (decode-universal-time tm)
-    (declare (ignore dow dst-p tz))
-    (format nil "~4,'0d-~2,'0d-~2,'0dT~2,'0d:~2,'0d:~2,'0dZ" yr mon day hr min sec)))
+    (declare (ignore dow dst-p tz)
+             (type fixnum yr mon day hr min sec dow))
+    (format nil
+            "~4,'0d-~2,'0d-~2,'0dT~2,'0d:~2,'0d:~2,'0dZ"
+              yr     mon    day    hr     min    sec)))
 
 (defgeneric write-gpx (el stream)
   (:documentation "Write a GPX element to a file."))
 
 (defmethod write-gpx ((pt gpx-pt) (stm stream))
-  (format stm "<trkpt lat=\"~,9f\" lon=\"~,9f\"><ele>~,9f</ele><time>~a</time></trkpt>~%"
+  (format stm
+          "<trkpt lat=\"~,9f\" lon=\"~,9f\"><ele>~,9f</ele><time>~a</time></trkpt>~%"
           (gpx-pt-lat pt)
           (gpx-pt-lon pt)
           (gpx-pt-ele pt)
@@ -71,22 +82,30 @@
 
 (defmethod write-gpx ((seg gpx-segment) (stm stream))
   (format stm "<trkseg>")
-  (loop for i in (gpx-segment-points seg) do
+  (loop
+    :for i :in (gpx-segment-points seg)
+    :do
        (write-gpx i stm))
   (format stm "</trkseg>"))
 
 (defmethod write-gpx ((track gpx-track) (stm stream))
   (format stm "<trk><name>~a</name>" (gpx-track-name track))
-  (loop for seg in (gpx-track-segments track) do
+  (loop
+    :for seg :in (gpx-track-segments track)
+    :do
        (write-gpx seg stm))
   (format stm "</trk>"))
 
 (defmethod write-gpx ((file gpx-file) (file-name string))
-  (with-open-file
-      (stream file-name :direction :output)
-    (format stream "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.0\" creator=\"gpxtools\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://www.topografix.com/GPX/1/0\" xsi:schemaLocation=\"http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd\">")
-    (format stream "<time>~a</time>" (format-iso (get-universal-time)))
-    (loop for track in (gpx-file-tracks file) do
+  (with-open-file (stream file-name :direction :output)
+    (format stream
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.0\" creator=\"gpxtools\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://www.topografix.com/GPX/1/0\" xsi:schemaLocation=\"http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd\">")
+    (format streama
+            "<time>~a</time>"
+            (format-iso (get-universal-time)))
+    (loop
+      :for track :in (gpx-file-tracks file)
+      :do
          (write-gpx track stream))
     (format stream "</gpx>")))
 
@@ -128,7 +147,7 @@
              (make-gpx-pt :lat lat :lon lon :ele ele :time time))))
 
       (xpath:with-namespaces
-	  (("gpx" (xpath:evaluate "namespace-uri(/*)" doc)))
+	      (("gpx" (xpath:evaluate "namespace-uri(/*)" doc)))
         (xpath:do-node-set
             (node (xpath:evaluate "/gpx:gpx/gpx:trk" doc))
           (setf rval (cons (process-track node) rval)))))
